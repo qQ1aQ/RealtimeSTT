@@ -13,7 +13,7 @@ COPY requirements-gpu.txt /app/requirements-gpu.txt
 # Ensure python-soundfile is installed
 RUN pip3 install --no-cache-dir -r /app/requirements-gpu.txt python-soundfile
 
-RUN mkdir -p example_browserclient # Use -p to create parent directories if they don't exist
+RUN mkdir -p example_browserclient 
 COPY example_browserclient/server.py /app/example_browserclient/server.py
 COPY RealtimeSTT /app/RealtimeSTT # Copies the RealtimeSTT package
 
