@@ -26,7 +26,7 @@ jobs:
         file: ./Dockerfile # Path to your Dockerfile
         push: true
         tags: |
-          YOUR_DOCKER_HUB_USERNAME/realtime-stt:latest
-          YOUR_DOCKER_HUB_USERNAME/realtime-stt:${{ github.sha }}
+          qq1aq/realtime-stt:latest
+          qq1aq/realtime-stt:${{ github.sha }}
         platforms: linux/amd64 # Specify the target platform
         target: gpu # Specify the target stage in your Dockerfile
