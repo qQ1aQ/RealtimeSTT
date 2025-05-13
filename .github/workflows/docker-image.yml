@@ -1,9 +1,9 @@
 name: Build and Push Docker Image
-
+#comment
 on:
   push:
     branches:
-      - main # Or the branch you want to trigger the action on
+      - master # Or the branch you want to trigger the action on
 
 jobs:
   build_and_push:
