@@ -2,7 +2,7 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS gpu
 
 WORKDIR /app
 
-# Install necessary system dependencies, including libasound2-dev and build-essential for PyAudio
+# Install necessary system dependencies
 RUN apt-get update -y && \
    apt-get install -y \
    python3 \
@@ -21,8 +21,10 @@ RUN apt-get update -y && \
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
 
 COPY requirements-gpu.txt /app/requirements-gpu.txt
-# Ensure soundfile is installed (PyAudio is a dependency from requirements.txt/RealtimeSTT)
 RUN pip3 install --no-cache-dir -r /app/requirements-gpu.txt soundfile
+
+# Downgrade ctranslate2 to be compatible with cuDNN 8.x
+RUN pip3 install --no-cache-dir ctranslate2==4.4.0
 
 # Use -p to create parent directories if they don't exist
 RUN mkdir -p example_browserclient
@@ -43,7 +45,7 @@ FROM ubuntu:22.04 AS cpu
 
 WORKDIR /app
 
-# Install necessary system dependencies, including libasound2-dev and build-essential for PyAudio
+# Install necessary system dependencies
 RUN apt-get update -y && \
    apt-get install -y \
    python3 \
@@ -59,8 +61,12 @@ RUN apt-get update -y && \
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
 
 COPY requirements.txt /app/requirements.txt
-# Ensure soundfile is installed (PyAudio is a dependency from requirements.txt/RealtimeSTT)
 RUN pip3 install --no-cache-dir -r /app/requirements.txt soundfile
+
+# Downgrade ctranslate2 (relevant for CPU if faster-whisper with ctranslate2 is used on CPU)
+# This might not be strictly necessary for CPU-only if a different STT engine version is used,
+# but good for consistency if requirements.txt also pulls a newer ctranslate2.
+RUN pip3 install --no-cache-dir ctranslate2==4.4.0
 
 # Expose the internal port the server runs on
 EXPOSE 9001
