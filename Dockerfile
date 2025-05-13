@@ -2,9 +2,20 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS gpu
 
 WORKDIR /app
 
-# Install necessary system dependencies, including python3-dev for PyAudio
+# Install necessary system dependencies, including libasound2-dev and build-essential for PyAudio
 RUN apt-get update -y && \
-   apt-get install -y python3 python3-dev python3-pip libcudnn8 libcudnn8-dev libcublas-12-4 portaudio19-dev libsndfile1 --no-install-recommends && \
+   apt-get install -y \
+   python3 \
+   python3-dev \
+   python3-pip \
+   libcudnn8 \
+   libcudnn8-dev \
+   libcublas-12-4 \
+   portaudio19-dev \
+   libasound2-dev \
+   libsndfile1 \
+   build-essential \
+   --no-install-recommends && \
    rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
@@ -32,9 +43,17 @@ FROM ubuntu:22.04 AS cpu
 
 WORKDIR /app
 
-# Install necessary system dependencies, including python3-dev for PyAudio
+# Install necessary system dependencies, including libasound2-dev and build-essential for PyAudio
 RUN apt-get update -y && \
-   apt-get install -y python3 python3-dev python3-pip portaudio19-dev libsndfile1 --no-install-recommends && \
+   apt-get install -y \
+   python3 \
+   python3-dev \
+   python3-pip \
+   portaudio19-dev \
+   libasound2-dev \
+   libsndfile1 \
+   build-essential \
+   --no-install-recommends && \
    rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
