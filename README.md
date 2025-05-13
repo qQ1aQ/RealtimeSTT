@@ -9,7 +9,7 @@
 *Easy-to-use, low-latency speech-to-text library for realtime applications*
 
 ## New
-
+#comment
 - AudioToTextRecorderClient class, which automatically starts a server if none is running and connects to it. The class shares the same interface as AudioToTextRecorder, making it easy to upgrade or switch between the two. (Work in progress, most parameters and callbacks of AudioToTextRecorder are already implemented into AudioToTextRecorderClient, but not all. Also the server can not handle concurrent (parallel) requests yet.)
 - reworked CLI interface ("stt-server" to start the server, "stt" to start the client, look at "server" folder for more info)
 
