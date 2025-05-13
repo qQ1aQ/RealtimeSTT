@@ -17,7 +17,7 @@ RUN mkdir -p example_browserclient
 COPY example_browserclient/server.py /app/example_browserclient/server.py
 COPY RealtimeSTT /app/RealtimeSTT # Copies the RealtimeSTT package
 
-EXPOSE 9001 # Expose the internal port the server runs on
+EXPOSE 9001 
 
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 # Removed redundant RUN export
@@ -41,7 +41,7 @@ COPY requirements.txt /app/requirements.txt
 # Ensure python-soundfile is installed
 RUN pip3 install --no-cache-dir -r /app/requirements.txt python-soundfile
 
-EXPOSE 9001 # Expose the internal port the server runs on
+EXPOSE 9001
 
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 # Removed redundant RUN export
