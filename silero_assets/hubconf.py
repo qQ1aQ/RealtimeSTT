@@ -1,5 +1,5 @@
 import os
-    import torch
+import torch
 
     DEPENDENCIES = ['torch']
 
