@@ -924,11 +924,11 @@ class AudioToTextRecorder:
         self.silero_vad_model = torch.hub.load('/app/silero_assets', 'silero_vad', source='local')
 
 
-        except Exception as e:
-            logger.exception(f"Error initializing Silero VAD "
-                              f"voice activity detection engine: {e}"
-                              )
-            raise
+    except Exception as e:
+        logger.exception(f"Error initializing Silero VAD "
+                        f"voice activity detection engine: {e}"
+                        )
+        raise
 
         logger.debug("Silero VAD voice activity detection "
                       "engine initialized successfully"
