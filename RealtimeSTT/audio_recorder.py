@@ -917,14 +917,12 @@ class AudioToTextRecorder:
                       "engine initialized successfully"
                       )
 
-        # Setup voice activity detection model Silero VAD
-        try:
-            self.silero_vad_model, _ = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                verbose=False,
-                onnx=silero_use_onnx
-            )
+        # Setup voice activity detection model Silero VAD EDITED
+    try:
+        # Load Silero VAD from local assets
+        # Assumes 'silero_assets' directory is at the root of the /app directory in the Docker container
+        self.silero_vad_model = torch.hub.load('/app/silero_assets', 'silero_vad', source='local')
+
 
         except Exception as e:
             logger.exception(f"Error initializing Silero VAD "

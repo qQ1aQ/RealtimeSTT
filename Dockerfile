@@ -4,19 +4,19 @@ WORKDIR /app
 
 # Install necessary system dependencies
 RUN apt-get update -y && \
-   apt-get install -y \
-   python3 \
-   python3-dev \
-   python3-pip \
-   libcudnn8 \
-   libcudnn8-dev \
-   libcublas-12-4 \
-   portaudio19-dev \
-   libasound2-dev \
-   libsndfile1 \
-   build-essential \
-   --no-install-recommends && \
-   rm -rf /var/lib/apt/lists/*
+    apt-get install -y \
+    python3 \
+    python3-dev \
+    python3-pip \
+    libcudnn8 \
+    libcudnn8-dev \
+    libcublas-12-4 \
+    portaudio19-dev \
+    libasound2-dev \
+    libsndfile1 \
+    build-essential \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
 
@@ -29,8 +29,11 @@ RUN pip3 install --no-cache-dir ctranslate2==4.4.0
 # Use -p to create parent directories if they don't exist
 RUN mkdir -p example_browserclient
 COPY example_browserclient/server.py /app/example_browserclient/server.py
-# Copies the RealtimeSTT package
+
+# Copies the RealtimeSTT package and the Silero assets
 COPY RealtimeSTT /app/RealtimeSTT
+COPY silero_assets /app/silero_assets
+
 
 # Expose the internal port the server runs on
 EXPOSE 9001
@@ -47,16 +50,16 @@ WORKDIR /app
 
 # Install necessary system dependencies
 RUN apt-get update -y && \
-   apt-get install -y \
-   python3 \
-   python3-dev \
-   python3-pip \
-   portaudio19-dev \
-   libasound2-dev \
-   libsndfile1 \
-   build-essential \
-   --no-install-recommends && \
-   rm -rf /var/lib/apt/lists/*
+    apt-get install -y \
+    python3 \
+    python3-dev \
+    python3-pip \
+    portaudio19-dev \
+    libasound2-dev \
+    libsndfile1 \
+    build-essential \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
 
