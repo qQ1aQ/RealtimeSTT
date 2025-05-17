@@ -568,7 +568,7 @@ class AudioToTextRecorder:
             model, wake word detection, or audio recording.
         """
 
-        self.language = language
+       self.language = language
         self.compute_type = compute_type
         self.input_device_index = input_device_index
         self.gpu_device_index = gpu_device_index
@@ -639,7 +639,7 @@ class AudioToTextRecorder:
         self.speech_end_silence_start = 0
         self.silero_sensitivity = silero_sensitivity
         self.silero_deactivity_detection = silero_deactivity_detection
-        self.silero_use_onnx = silero_use_onnx # <<< ADDED LINE to store __init__ param
+        self.silero_use_onnx = silero_use_onnx # Storing the parameter
         self.listen_start = 0
         self.spinner = spinner
         self.halo = None
@@ -682,15 +682,11 @@ class AudioToTextRecorder:
 
         # ----------------------------------------------------------------------------
         # Named logger configuration
-        # By default, let's set it up so it logs at 'level' to the console.
-        # If you do NOT want this default configuration, remove the lines below
-        # and manage your "realtimestt" logger from your application code.
-        logger.setLevel(logging.DEBUG)  # We capture all, then filter via handlers
+        logger.setLevel(logging.DEBUG) 
 
         log_format = "RealTimeSTT: %(name)s - %(levelname)s - %(message)s"
         file_log_format = "%(asctime)s.%(msecs)03d - " + log_format
 
-        # Create and set up console handler
         console_handler = logging.StreamHandler()
         console_handler.setLevel(self.level)
         console_handler.setFormatter(logging.Formatter(log_format))
@@ -708,7 +704,6 @@ class AudioToTextRecorder:
         self.shutdown_event = mp.Event()
 
         try:
-            # Only set the start method if it hasn't been set already
             if mp.get_start_method(allow_none=True) is None:
                 mp.set_start_method("spawn")
         except RuntimeError as e:
@@ -719,6 +714,7 @@ class AudioToTextRecorder:
         if use_extended_logging:
             logger.info("RealtimeSTT was called with these parameters:")
             for param, value in locals().items():
+                if param == "self": continue # Avoid printing self
                 logger.info(f"{param}: {value}")
 
         self.interrupt_stop_event = mp.Event()
@@ -728,7 +724,6 @@ class AudioToTextRecorder:
         self.parent_transcription_pipe, child_transcription_pipe = SafePipe()
         self.parent_stdout_pipe, child_stdout_pipe = SafePipe()
 
-        # Set device for model
         self.device = "cuda" if self.device == "cuda" and torch.cuda.is_available() else "cpu"
 
         self.transcript_process = self._start_thread(
@@ -753,7 +748,6 @@ class AudioToTextRecorder:
             )
         )
 
-        # Start audio data reading process
         if self.use_microphone.value:
             logger.info("Initializing audio recording"
                          " (creating pyAudio input stream,"
@@ -773,7 +767,6 @@ class AudioToTextRecorder:
                 )
             )
 
-        # Initialize the realtime transcription model
         if self.enable_realtime_transcription and not self.use_main_model_for_realtime:
             try:
                 logger.info("Initializing faster_whisper realtime "
@@ -793,7 +786,6 @@ class AudioToTextRecorder:
                 if self.realtime_batch_size > 0:
                     self.realtime_model_type = BatchedInferencePipeline(model=self.realtime_model_type)
 
-                # Run a warm-up transcription
                 current_dir = os.path.dirname(os.path.realpath(__file__))
                 warmup_audio_path = os.path.join(
                     current_dir, "warmup_audio.wav"
@@ -806,14 +798,11 @@ class AudioToTextRecorder:
                                   f"realtime transcription model: {e}"
                                   )
                 raise
-
             logger.debug("Faster_whisper realtime speech to text "
                           "transcription model initialized successfully")
 
-        # Setup wake word detection
         if wake_words or wakeword_backend in {'oww', 'openwakeword', 'openwakewords', 'pvp', 'pvporcupine'}:
             self.wakeword_backend = wakeword_backend
-
             self.wake_words_list = [
                 word.strip() for word in wake_words.lower().split(',')
             ]
@@ -831,7 +820,6 @@ class AudioToTextRecorder:
                     )
                     self.buffer_size = self.porcupine.frame_length
                     self.sample_rate = self.porcupine.sample_rate
-
                 except Exception as e:
                     logger.exception(
                         "Error initializing porcupine "
@@ -839,14 +827,11 @@ class AudioToTextRecorder:
                         f"Wakewords: {self.wake_words_list}."
                     )
                     raise
-
                 logger.debug(
                     "Porcupine wake word detection engine initialized successfully"
                 )
-
             elif wake_words and self.wakeword_backend in {'oww', 'openwakeword', 'openwakewords'}:
-                                    openwakeword.utils.download_models()
-
+                openwakeword.utils.download_models()
                 try:
                     if openwakeword_model_paths:
                         model_paths = openwakeword_model_paths.split(',')
@@ -861,80 +846,67 @@ class AudioToTextRecorder:
                     else:
                         self.owwModel = Model(
                             inference_framework=openwakeword_inference_framework)
-                    
                     self.oww_n_models = len(self.owwModel.models.keys())
                     if not self.oww_n_models:
-                        logger.error(
-                            "No wake word models loaded."
-                        )
-
+                        logger.error("No wake word models loaded.")
                     for model_key in self.owwModel.models.keys():
                         logger.info(
                             "Successfully loaded openwakeword model: "
                             f"{model_key}"
                         )
-
                 except Exception as e:
                     logger.exception(
                         "Error initializing openwakeword "
                         f"wake word detection engine: {e}"
                     )
                     raise
-
-                logger.debug(
-                    "Open wake word detection engine initialized successfully"
-                )
-            
+                logger.debug("Open wake word detection engine initialized successfully")
             else:
                 logger.exception(f"Wakeword engine {self.wakeword_backend} unknown/unsupported or wake_words not specified. Please specify one of: pvporcupine, openwakeword.")
 
         # Setup voice activity detection model WebRTC
+        # Ensure all lines in this block have 8-space indent for the block, 12 for inside try/except
         try:
             logger.info("Initializing WebRTC voice with "
                          f"Sensitivity {webrtc_sensitivity}"
                          )
             self.webrtc_vad_model = webrtcvad.Vad()
             self.webrtc_vad_model.set_mode(webrtc_sensitivity)
-
         except Exception as e:
             logger.exception("Error initializing WebRTC voice "
                               f"activity detection engine: {e}"
                               )
             raise
-
         logger.debug("WebRTC VAD voice activity detection "
                       "engine initialized successfully"
                       )
 
-        # <<< MODIFIED BLOCK START for Silero VAD Loading (MOVED HERE and UPDATED) >>>
         # Setup voice activity detection model Silero VAD
-        self.silero_vad_model = None # Initialize to None
-        self.silero_vad_utils = None # Initialize to None
-        try:
+        # All these lines (self.silero..., try, except) should have THE SAME INDENTATION (e.g., 8 spaces)
+        self.silero_vad_model = None 
+        self.silero_vad_utils = None 
+        try: # THIS IS THE AREA OF LINE 850
             logger.info("Initializing Silero VAD voice activity detection engine..."
                         f"ONNX: {self.silero_use_onnx}")
-            # Load Silero VAD from local assets
-            # Assumes 'silero_assets' directory is at the root of the /app directory in the Docker container
+            # Lines inside try should be indented further (e.g., 12 spaces)
             self.silero_vad_model, self.silero_vad_utils = torch.hub.load(
-                repo_or_dir='/app/silero_assets', # Path to the directory containing hubconf.py
-                model='silero_vad',              # Name of the model entry point in hubconf.py
+                repo_or_dir='/app/silero_assets', 
+                model='silero_vad',              
                 source='local',
-                trust_remote_code=True,          # Important for local custom hubconf
-                onnx=self.silero_use_onnx        # Use the instance's configured onnx setting
+                trust_remote_code=True,          
+                onnx=self.silero_use_onnx        
             )
             logger.debug("Silero VAD voice activity detection "
                          "engine initialized successfully"
                          )
-        except Exception as e:
+        except Exception as e: # This except must align with the try above
             logger.exception(f"Error initializing Silero VAD "
                              f"voice activity detection engine: {e}"
                              )
-            # Optionally, you might want to disable Silero VAD features if loading fails
-            # or raise the exception if it's critical. For now, it logs and continues.
             self.silero_vad_model = None 
             self.silero_vad_utils = None
-        # <<< MODIFIED BLOCK END for Silero VAD Loading >>>
 
+        # Remaining __init__ assignments, also at 8-space indent
         self.audio_buffer = collections.deque(
             maxlen=int((self.sample_rate // self.buffer_size) *
                        self.pre_recording_buffer_duration)
@@ -946,22 +918,19 @@ class AudioToTextRecorder:
         self.frames = []
         self.last_frames = []
 
-        # Recording control flags
         self.is_recording = False
         self.is_running = True
         self.start_recording_on_voice_activity = False
         self.stop_recording_on_voice_deactivity = False
 
-        # Start the recording worker thread
         self.recording_thread = threading.Thread(target=self._recording_worker)
         self.recording_thread.daemon = True
         self.recording_thread.start()
 
-        # Start the realtime transcription worker thread
         self.realtime_thread = threading.Thread(target=self._realtime_worker)
         self.realtime_thread.daemon = True
         self.realtime_thread.start()
-                            # Wait for transcription models to start
+        
         logger.debug('Waiting for main transcription model to start')
         self.main_transcription_ready_event.wait()
         logger.debug('Main transcription model ready')
@@ -971,6 +940,7 @@ class AudioToTextRecorder:
         self.stdout_thread.start()
 
         logger.debug('RealtimeSTT initialization completed successfully')
+
 
     def _start_thread(self, target=None, args=()):
         """
