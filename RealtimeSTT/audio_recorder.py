@@ -824,7 +824,7 @@ class AudioToTextRecorder:
             ]
 
             if wake_words and self.wakeword_backend in {'pvp', 'pvporcupine'}:
-                 try:
+                try:
                     self.porcupine = pvporcupine.create(
                         keywords=self.wake_words_list,
                         sensitivities=self.wake_words_sensitivities
@@ -832,7 +832,7 @@ class AudioToTextRecorder:
                     self.buffer_size = self.porcupine.frame_length
                     self.sample_rate = self.porcupine.sample_rate
 
-                 except Exception as e:
+                except Exception as e:
                     logger.exception(
                         "Error initializing porcupine "
                         f"wake word detection engine: {e}. "
@@ -840,14 +840,14 @@ class AudioToTextRecorder:
                     )
                     raise
 
-                 logger.debug(
+                logger.debug(
                     "Porcupine wake word detection engine initialized successfully"
                 )
 
             elif wake_words and self.wakeword_backend in {'oww', 'openwakeword', 'openwakewords'}:
-                                     openwakeword.utils.download_models()
+                                    openwakeword.utils.download_models()
 
-                 try:
+                try:
                     if openwakeword_model_paths:
                         model_paths = openwakeword_model_paths.split(',')
                         self.owwModel = Model(
@@ -874,14 +874,14 @@ class AudioToTextRecorder:
                             f"{model_key}"
                         )
 
-                 except Exception as e:
+                except Exception as e:
                     logger.exception(
                         "Error initializing openwakeword "
                         f"wake word detection engine: {e}"
                     )
                     raise
 
-                 logger.debug(
+                logger.debug(
                     "Open wake word detection engine initialized successfully"
                 )
             
