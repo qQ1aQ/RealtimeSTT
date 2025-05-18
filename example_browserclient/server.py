@@ -2,10 +2,6 @@ import sys
 import os
 
 print("Starting server, please wait...")
-# sys.path should be correctly set by Dockerfile's ENV PYTHONPATH to include /app
-# The RealtimeSTT repo is cloned to /app/RealtimeSTT
-# The package itself is at /app/RealtimeSTT/RealtimeSTT
-# The working import, as per diagnostics, is:
 print(f"Working directory: {os.getcwd()}")
 print(f"Attempting import: from RealtimeSTT.RealtimeSTT import AudioToTextRecorder")
 try:
@@ -13,7 +9,6 @@ try:
     print("Successfully imported AudioToTextRecorder from RealtimeSTT.RealtimeSTT")
 except ImportError as e:
     print(f"CRITICAL: Failed to import AudioToTextRecorder even with direct path: {e}")
-    # Add more debug info if this fails, though it shouldn't based on previous log
     print(f"Current sys.path: {sys.path}")
     print(f"Contents of /app: {os.listdir('/app') if os.path.exists('/app') else 'N/A'}")
     print(f"Contents of /app/RealtimeSTT: {os.listdir('/app/RealtimeSTT') if os.path.exists('/app/RealtimeSTT') else 'N/A'}")
@@ -25,7 +20,7 @@ import asyncio
 import websockets
 import threading
 import numpy as np
-from scipy.signal import resample # Ensure scipy is in your requirements-gpu.txt
+from scipy.signal import resample
 import json
 import logging
 
@@ -72,6 +67,7 @@ recorder_config = {
     'language': 'en',
     'device': "cuda",
     'silero_use_onnx': True,
+    'silero_assets_path': '/app/RealtimeSTT/silero_assets', # Corrected path
     'silero_sensitivity': 0.4,
     'webrtc_sensitivity': 2,
     'post_speech_silence_duration': 0.7,
@@ -79,7 +75,7 @@ recorder_config = {
     'min_gap_between_recordings': 0.0,
     'enable_realtime_transcription': True,
     'realtime_processing_pause': 0.05,
-    'realtime_model_type': 'tiny.en', # This should also try to use 'cuda' if device='cuda'
+    'realtime_model_type': 'tiny.en',
     'on_realtime_transcription_stabilized': text_detected,
 }
 
@@ -88,7 +84,15 @@ def run_recorder():
     try:
         logger.info(f"Initializing RealtimeSTT with config: {json.dumps(recorder_config, default=lambda o: '<object>')}")
         recorder = AudioToTextRecorder(**recorder_config)
-        logger.info("RealtimeSTT initialized successfully.")
+        # Check if VAD was actually enabled after initialization attempt
+        if recorder and recorder.use_silero_vad:
+            logger.info("RealtimeSTT initialized successfully with Silero VAD enabled.")
+        elif recorder: # recorder exists but VAD got disabled
+            logger.warning("RealtimeSTT initialized, but Silero VAD failed to load and is disabled.")
+        else: # recorder object itself is None
+             logger.error("RealtimeSTT recorder object is None after initialization attempt.")
+             # This case should ideally not happen if AudioToTextRecorder constructor doesn't return None
+        
         recorder_ready.set() 
 
         while is_running:
@@ -108,7 +112,7 @@ def run_recorder():
                     else:
                         threading.Event().wait(0.01)
             else:
-                logger.warning("Recorder object not available in run_recorder loop.")
+                logger.warning("Recorder object not available in run_recorder loop. Possible init failure.")
                 if main_loop and main_loop.is_running():
                     asyncio.run_coroutine_threadsafe(asyncio.sleep(0.1), main_loop)
                 else:
@@ -156,9 +160,17 @@ async def audio_handler(websocket):
     client_websocket = websocket 
 
     try:
+        # Wait for recorder_ready, which is set even if VAD fails but main STT model loads.
         if not recorder_ready.wait(timeout=20): 
-            logger.error("Recorder not ready within timeout. Closing connection.")
+            logger.error("Recorder not ready within timeout (recorder_ready event not set). Closing connection.")
             await websocket.send(json.dumps({"type": "error", "message": "Server recorder initialization timeout."}))
+            await websocket.close()
+            return
+
+        # Additional check for the recorder object itself
+        if recorder is None:
+            logger.error("Recorder object is None after initialization. Cannot process audio.")
+            await websocket.send(json.dumps({"type": "error", "message": "Server STT engine failed to initialize."}))
             await websocket.close()
             return
         
@@ -177,7 +189,7 @@ async def audio_handler(websocket):
                     if recorder:
                         recorder.feed_audio(processed_chunk)
                     else:
-                        logger.warning("Recorder not available to feed audio.")
+                        logger.warning("Recorder not available to feed audio.") # Should not happen if checks above pass
                 else:
                     logger.warning("Received empty audio chunk from client.")
             
@@ -208,17 +220,26 @@ async def main_server_logic():
     recorder_thread = threading.Thread(target=run_recorder, daemon=True)
     recorder_thread.start()
 
-    initialization_timeout = 90 
+    initialization_timeout = 90 # Increased timeout for model loading
+    logger.info(f"Waiting up to {initialization_timeout}s for recorder_ready event...")
     if not recorder_ready.wait(timeout=initialization_timeout):
-        logger.error(f"RealtimeSTT recorder failed to initialize in {initialization_timeout}s. Server not starting.")
+        logger.error(f"RealtimeSTT recorder failed to signal readiness within {initialization_timeout}s. Server not starting listener.")
         is_running = False 
         if recorder_thread.is_alive():
             recorder_thread.join(timeout=5) 
-        # Ensure server doesn't try to start if recorder init failed catastrophically
-        # and run_recorder might have exited early before setting recorder_ready.
-        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): # Check if import failed or recorder obj is None
-            logger.error("Exiting main_server_logic as recorder initialization seems to have failed critically.")
-            return
+        return 
+    
+    # After recorder_ready is set, check if recorder object actually exists and if VAD is working
+    if recorder is None:
+        logger.error("Recorder object is None even after recorder_ready. Cannot start WebSocket server.")
+        is_running = False
+        if recorder_thread.is_alive():
+            recorder_thread.join(timeout=5)
+        return
+    elif not recorder.use_silero_vad: # Assuming use_silero_vad attribute reflects status
+        logger.warning("Proceeding without Silero VAD as it failed to initialize.")
+    else:
+        logger.info("Silero VAD appears to be initialized. Proceeding.")
 
 
     server_host = "0.0.0.0"
@@ -237,8 +258,8 @@ async def main_server_logic():
             ping_timeout=20   
         ):
             await stop_event.wait() 
-    except OSError as e:
-        logger.error(f"OSError starting server (Port {server_port} likely in use or permission issue): {e}")
+    except OSError as e: # Specific for server start issues like port in use
+        logger.error(f"OSError starting server on {server_host}:{server_port} (Port likely in use or permission issue): {e}")
         is_running = False
     except Exception as e:
         logger.error(f"Main server logic encountered an unexpected error: {e}", exc_info=True)
@@ -255,18 +276,16 @@ async def main_server_logic():
         logger.info("Main server logic finished.")
 
 if __name__ == '__main__':
-    # Check if the critical import worked before trying to run asyncio loop
     if 'AudioToTextRecorder' in globals():
         try:
             asyncio.run(main_server_logic())
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt received. Shutting down application...")
-        except Exception as e: # Catch any other unexpected errors during asyncio.run
+        except Exception as e: 
             logger.error(f"Unhandled exception in asyncio.run: {e}", exc_info=True)
         finally:
             is_running = False 
             logger.info("Application shutdown complete.")
     else:
         logger.error("Application cannot start because AudioToTextRecorder could not be imported.")
-        # is_running will be false by default or set by earlier sys.exit
         logger.info("Application shutdown due to import failure.")
