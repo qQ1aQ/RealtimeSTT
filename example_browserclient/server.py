@@ -181,8 +181,8 @@ if __name__ == '__main__':
         recorder_thread.start()
 
         # Wait for the recorder to be ready before starting the server
-        if not recorder_ready.wait(timeout=30): # Increased timeout
-            logger.error("RealtimeSTT recorder failed to initialize in 30 seconds. Server not starting.")
+        if not recorder_ready.wait(timeout=60): # Increased timeout
+            logger.error("RealtimeSTT recorder failed to initialize in 60 seconds. Server not starting.")
             is_running = False
             return
 
