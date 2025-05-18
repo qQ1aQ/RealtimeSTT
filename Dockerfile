@@ -22,26 +22,23 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 
 # Pip install PyTorch and Torchaudio with specific CUDA support first
-# Ensure this matches the CUDA version of the base image (12.4 for base, torch 2.3 uses 12.1 compatible index)
-# Using the +cu121 versions for PyTorch 2.3.0
 RUN pip3 install torch==2.3.0+cu121 torchaudio==2.3.0+cu121 --index-url https://download.pytorch.org/whl/cu121
 
 # Copy requirements first to leverage Docker cache
-# Make sure your requirements-gpu.txt includes:
-# faster-whisper
-# onnxruntime-gpu  (Ensure this is specifically onnxruntime-gpu, not just onnxruntime)
-# websockets
-# numpy
-# scipy
-# (and any other direct dependencies RealtimeSTT or your server.py might have)
 COPY requirements-gpu.txt /app/requirements-gpu.txt
 RUN pip3 install --no-cache-dir -r /app/requirements-gpu.txt
 
 # Clone RealtimeSTT repository
-# Using a shallow clone to save space and time if you don't need history
-# Added an echo to try and invalidate the cache for this layer
-RUN echo "Forcing re-clone of RealtimeSTT by adding this echo command" && \
-    git clone --depth 1 https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT
+# Adding rm -rf and ls commands to ensure a clean clone and to debug contents.
+# This should definitely change the layer and bust the cache.
+RUN echo "Preparing to clone RealtimeSTT..." && \
+    rm -rf /app/RealtimeSTT && \
+    echo "Cloning RealtimeSTT repository..." && \
+    git clone --depth 1 https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT && \
+    echo "Listing contents of /app/RealtimeSTT after clone:" && \
+    ls -la /app/RealtimeSTT && \
+    echo "Checking for /app/RealtimeSTT/silero_assets:" && \
+    (ls -la /app/RealtimeSTT/silero_assets && echo "silero_assets directory found.") || echo "silero_assets directory NOT found in /app/RealtimeSTT immediately after clone."
 
 # Copy silero_assets from the cloned repo to /app/silero_assets
 # This makes it accessible as "./silero_assets" from the CWD /app when the server runs,
@@ -49,19 +46,13 @@ RUN echo "Forcing re-clone of RealtimeSTT by adding this echo command" && \
 COPY --chown=root:root /app/RealtimeSTT/silero_assets /app/silero_assets
 
 # Copy your application code that uses RealtimeSTT
-# Assuming your server.py is in a directory named 'example_browserclient'
-# relative to your Dockerfile's context.
 COPY example_browserclient/server.py /app/example_browserclient/server.py
-# If you have an HTML file or other assets for the client, copy them too:
-# COPY example_browserclient/realtime1.html /app/example_browserclient/realtime1.html
 
 # Expose the port the server runs on (server.py is configured for 7860)
 EXPOSE 7860
 
-# Set PYTHONPATH so Python can find modules in /app (like RealtimeSTT.RealtimeSTT)
-# and also the top-level RealtimeSTT if it were structured differently.
+# Set PYTHONPATH so Python can find modules in /app
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Command to run your application
-# The default WORKDIR is /app
 CMD ["python3", "example_browserclient/server.py"]
