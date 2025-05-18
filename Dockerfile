@@ -51,32 +51,19 @@ COPY example_browserclient/server.py /app/example_browserclient/server.py
 EXPOSE 7860
 
 # Set PYTHONPATH
-ENV PYTHONPATH="/app:${PYTHONPATH}" # The warning about $PYTHONPATH here is minor and not related to the COPY failure
+# The warning about $PYTHONPATH potentially being unset at build time is usually minor
+# and doesn't affect the runtime behavior of the container for this use case.
+ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Command to run your application
 CMD ["python3", "example_browserclient/server.py"]
 ```
 
-**Key Changes in this Dockerfile:**
+**The fix:**
+The comment on the `ENV PYTHONPATH` line has been moved to the lines above it.
 
-1.  **Correct `ARG` Placement**: `ARG CACHE_BUSTER_ARG` is now *after* `FROM nvidia/cuda...`. This is crucial.
-2.  **Safer `ARG` Expansion**: In the `echo` command, I've used `${CACHE_BUSTER_ARG:-default_value_if_not_set}`. This bash-like expansion provides a default if the ARG isn't set, making the echo more robust, though the main goal is ensuring the command string changes if `CACHE_BUSTER_ARG` is passed and changes.
-3.  Emphasized success/failure messages in the clone step.
-
-**Crucial GitHub Actions Workflow Step:**
-Please ensure your `docker/build-push-action@v5` step in your GitHub Actions workflow file correctly passes the `build-args`. This is essential for the `ARG` to receive a new value and bust the cache.
-
-```yaml
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true # Or false, depending on your needs
-          tags: yourusername/realtime-stt:latest # Replace with your tags
-          target: gpu # Ensure your target is 'gpu'
-          # THIS IS THE CRITICAL PART FOR CACHE BUSTING THE ARG
-          build-args: |
-            CACHE_BUSTER_ARG=${{ github.sha }}
-          # To be absolutely sure about caching for now (will slow down builds):
-          # no-cache: true # <-- You can try this if ARG still fails.
+```dockerfile
+# Set PYTHONPATH
+# The warning about $PYTHONPATH potentially being unset at build time is usually minor
+# and doesn't affect the runtime behavior of the container for this use case.
+ENV PYTHONPATH="/app:${PYTHONPATH}"
