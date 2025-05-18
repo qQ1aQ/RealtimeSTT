@@ -2,7 +2,7 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS gpu
 
 WORKDIR /app
 
-# Install necessary system dependencies
+# Install necessary system dependencies including git
 RUN apt-get update -y && \
     apt-get install -y \
     python3 \
@@ -15,59 +15,42 @@ RUN apt-get update -y && \
     libasound2-dev \
     libsndfile1 \
     build-essential \
-    git \  # <--- ADD GIT HERE
+    git \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch==2.3.0 torchaudio==2.3.0
 
+# This requirements-gpu.txt MUST contain 'onnxruntime-gpu'
 COPY requirements-gpu.txt /app/requirements-gpu.txt
 RUN pip3 install --no-cache-dir -r /app/requirements-gpu.txt soundfile
-RUN pip3 install --no-cache-dir ctranslate2==4.4.0 # Keep pinned for now
 
-# Remove old copied directories if they were from previous builds layers (defensive)
+# Pin ctranslate2 for current cuDNN compatibility with faster-whisper
+RUN pip3 install --no-cache-dir ctranslate2==4.4.0
+
+# Remove any old versions if they exist from previous layers to ensure clean clone
 RUN rm -rf /app/RealtimeSTT
-RUN rm -rf /app/silero_assets
+RUN rm -rf /app/silero_assets # This is now part of the cloned repo
 
-# Clone the RealtimeSTT repository. This creates /app/RealtimeSTT directory containing the library and assets.
+# Clone the latest RealtimeSTT repository
+# This will place the 'RealtimeSTT' package and 'silero_assets' inside /app/RealtimeSTT/
+# e.g. /app/RealtimeSTT/RealtimeSTT/ (package) and /app/RealtimeSTT/silero_assets/
 RUN git clone https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT
-# Now you have /app/RealtimeSTT/RealtimeSTT (the package) and /app/RealtimeSTT/silero_assets
 
-# Your server.py COPY command needs to be relative to this new structure if it's part of the repo,
-# or if you're using your own server.py, it needs to be able to find the RealtimeSTT package.
-# Your current setup:
-# COPY example_browserclient/server.py /app/example_browserclient/server.py
-# This server.py is *your* version. It needs to find the RealtimeSTT package.
-# The `RealtimeSTT` package from the clone is at `/app/RealtimeSTT/RealtimeSTT/`.
-# And `silero_assets` is at `/app/RealtimeSTT/silero_assets/`.
-# The library code (e.g., audio_recorder.py) is in `/app/RealtimeSTT/RealtimeSTT/audio_recorder.py`.
-# It looks for `silero_assets` using `os.path.join(os.path.dirname(__file__), '..', 'silero_assets', SILERO_MODEL_NAME)`
-# So from `/app/RealtimeSTT/RealtimeSTT/audio_recorder.py`, `os.path.dirname(__file__)` is `/app/RealtimeSTT/RealtimeSTT`.
-# `..` goes to `/app/RealtimeSTT`.
-# So it correctly finds `/app/RealtimeSTT/silero_assets`. This is good.
+# Copy your custom server.py (assuming it's in 'example_browserclient' in your build context)
+# Adjust the source path if your local 'server.py' is elsewhere.
+COPY example_browserclient/server.py /app/example_browserclient/server.py
 
-# For your server.py at `/app/example_browserclient/server.py` to successfully do `from RealtimeSTT import ...`
-# it expects `RealtimeSTT` to be a top-level package.
-# The cloned structure at `/app/RealtimeSTT/` has the `RealtimeSTT` *package* inside it.
-# So the import path needed for Python is essentially `/app/RealtimeSTT` on the PYTHONPATH.
+# Expose the port your server.py listens on
+EXPOSE 7860
 
-# Your current `ENV PYTHONPATH="${PYTHONPATH}:/app"` should be sufficient if Python's import mechanism
-# correctly sees `/app/RealtimeSTT` as the location of the main project, and then can import the
-# `RealtimeSTT` package which is a directory inside it.
-# So `from RealtimeSTT import AudioToTextRecorder` should work.
-
-# Re-confirming COPY lines from your Dockerfile:
-# RUN mkdir -p example_browserclient # This is not needed if we COPY the directory
-COPY example_browserclient/server.py /app/example_browserclient/server.py # This provides *your* modified server.py
-
-# Expose the internal port the server runs on
-EXPOSE 7860 # Your server.py listens on 7860 now
-
-# ENV PYTHONPATH="${PYTHONPATH}:/app" # This allows imports from /app
-# Your `server.py` is in `/app/example_browserclient/`
-# It tries `from RealtimeSTT import AudioToTextRecorder`
-# Python will look for `/app/RealtimeSTT/...` due to PYTHONPATH.
-# The clone created `/app/RealtimeSTT/RealtimeSTT/__init__.py`.
-# This means Python can find the package.
+# Add /app to PYTHONPATH.
+# The 'RealtimeSTT' package is now at /app/RealtimeSTT/RealtimeSTT/
+# For 'from RealtimeSTT import ...' to work from your server.py,
+# Python needs to find the directory *containing* the 'RealtimeSTT' package.
+# The cloned repository root is /app/RealtimeSTT. Inside this is the RealtimeSTT package directory.
+# So, /app (which is on PYTHONPATH) allows Python to see the /app/RealtimeSTT directory, which is the project root.
+# The import `from RealtimeSTT import ...` refers to the package directory `/app/RealtimeSTT/RealtimeSTT/`.
+ENV PYTHONPATH="${PYTHONPATH}:/app"
 
 CMD ["python3", "example_browserclient/server.py"]
