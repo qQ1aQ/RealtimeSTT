@@ -51,7 +51,7 @@ if __name__ == '__main__':
         'language': 'en',
         
         'device': "cuda",             # Main device for models (Whisper)
-        'silero_use_onnx': True,      # Use ONNX for Silero VAD. With device="cuda" and onnxruntime-gpu, VAD should use GPU.
+        'silero_use_onnx': False,     # Try to use silero_vad.jit on GPU
         
         'silero_sensitivity': 0.4,
         'webrtc_sensitivity': 2, 
@@ -60,14 +60,13 @@ if __name__ == '__main__':
         'min_gap_between_recordings': 0,
         'enable_realtime_transcription': True,
         'realtime_processing_pause': 0.05,
-        'realtime_model_type': 'tiny.en', # This should also run on CUDA due to device="cuda"
+        'realtime_model_type': 'tiny.en', # Should also run on CUDA due to device="cuda"
         'on_realtime_transcription_stabilized': text_detected,
     }
 
     def run_recorder():
         global recorder, main_loop, is_running, logger, recorder_ready
         try:
-            # I'll add the config to the log here for easier debugging
             logger.info(f"Initializing RealtimeSTT with config: {json.dumps(recorder_config, default=lambda o: '<object>')}")
             recorder = AudioToTextRecorder(**recorder_config)
             logger.info("RealtimeSTT initialized")
@@ -126,7 +125,7 @@ if __name__ == '__main__':
         client_websocket = websocket
 
         try:
-            if not recorder_ready.wait(timeout=10):
+            if not recorder_ready.wait(timeout=10): # Reduced timeout as JIT model is smaller
                 logger.error("Recorder not ready after 10s, closing connection.")
                 await websocket.send(json.dumps({"type": "error", "message": "Server recorder not ready."}))
                 await websocket.close()
@@ -175,8 +174,7 @@ if __name__ == '__main__':
         recorder_thread = threading.Thread(target=run_recorder, daemon=True)
         recorder_thread.start()
 
-        # Increased timeout for recorder ready, as models esp. large ones can take time to load
-        if not recorder_ready.wait(timeout=60): # Increased from 30 to 60 seconds
+        if not recorder_ready.wait(timeout=60): 
             logger.error("RealtimeSTT recorder failed to initialize in 60 seconds. Server not starting.")
             is_running = False
             if recorder_thread.is_alive(): recorder_thread.join(timeout=1)
