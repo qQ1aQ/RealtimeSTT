@@ -141,8 +141,8 @@ if __name__ == '__main__':
                         metadata_json = message[4:4+metadata_length].decode('utf-8')
                         metadata = json.loads(metadata_json)
                         sample_rate = metadata.get('sampleRate', 16000) # Default if not provided
-                        
-                        audio_chunk = message[4+metadata_length:]
+                                                
+                        audio_chunk = message[4+metadata_length:] 
 
                         if audio_chunk:
                             resampled_chunk = decode_and_resample(audio_chunk, sample_rate, 16000)
@@ -150,7 +150,7 @@ if __name__ == '__main__':
                                 recorder.feed_audio(resampled_chunk)
                         else:
                             logger.warning("Received empty audio chunk after metadata.")
-
+                            
                     except json.JSONDecodeError as e:
                         logger.error(f"Metadata JSONDecodeError: {e}. Raw message (first 100 bytes): {message[:100]}")
                     except ValueError as e:
