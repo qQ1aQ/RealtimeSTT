@@ -1,64 +1,26 @@
 import sys
 import os
 
-# Add the root of the cloned RealtimeSTT repository to Python's search path.
-# The Dockerfile's ENV PYTHONPATH already adds /app.
-# The cloned repo is at /app/RealtimeSTT.
-# This directory (/app/RealtimeSTT) contains the top-level __init__.py that Python is finding.
-# Let's ensure it's at the front to avoid any conflicts if other RealtimeSTT versions are somehow on the path.
-# However, with a clean Docker build, this shouldn't strictly be necessary if ENV PYTHONPATH is set up.
-# The primary issue is likely within the execution of /app/RealtimeSTT/__init__.py or its submodule imports.
-
-# print("Attempting to adjust sys.path...")
-# # Path to the directory containing the 'RealtimeSTT' package (the one with audio_recorder.py)
-# # This is /app/RealtimeSTT -- the root of the clone
-# package_parent_dir = '/app/RealtimeSTT'
-# if package_parent_dir not in sys.path:
-#    sys.path.insert(0, package_parent_dir)
-
-print(f"Initial sys.path: {sys.path}")
-
-# Forcing the directory that CONTAINS the RealtimeSTT package (/app/RealtimeSTT) to be on path
-# This means Python looks for /app/RealtimeSTT/RealtimeSTT package
-# repo_root_path = '/app' # This is already on path from Dockerfile
-# if repo_root_path not in sys.path:
-#     sys.path.insert(0, repo_root_path)
-
-
 print("Starting server, please wait...")
-print(f"Current sys.path before import: {sys.path}")
+# sys.path should be correctly set by Dockerfile's ENV PYTHONPATH to include /app
+# The RealtimeSTT repo is cloned to /app/RealtimeSTT
+# The package itself is at /app/RealtimeSTT/RealtimeSTT
+# The working import, as per diagnostics, is:
 print(f"Working directory: {os.getcwd()}")
-print(f"Contents of /app: {os.listdir('/app') if os.path.exists('/app') else 'N/A'}")
-print(f"Contents of /app/RealtimeSTT: {os.listdir('/app/RealtimeSTT') if os.path.exists('/app/RealtimeSTT') else 'N/A'}")
-print(f"Contents of /app/RealtimeSTT/RealtimeSTT: {os.listdir('/app/RealtimeSTT/RealtimeSTT') if os.path.exists('/app/RealtimeSTT/RealtimeSTT') else 'N/A'}")
-print(f"Attempting import: from RealtimeSTT import AudioToTextRecorder")
-
+print(f"Attempting import: from RealtimeSTT.RealtimeSTT import AudioToTextRecorder")
 try:
-    from RealtimeSTT import AudioToTextRecorder # This will now import from the cloned repo
+    from RealtimeSTT.RealtimeSTT import AudioToTextRecorder
+    print("Successfully imported AudioToTextRecorder from RealtimeSTT.RealtimeSTT")
 except ImportError as e:
-    print(f"Failed initial import: {e}")
-    print("Attempting import from RealtimeSTT.RealtimeSTT as a fallback diagnostic...")
-    try:
-        # This would be how you'd import if /app was on sys.path and RealtimeSTT was the cloned dir.
-        from RealtimeSTT.RealtimeSTT import AudioToTextRecorder
-        print("Fallback import RealtimeSTT.RealtimeSTT.AudioToTextRecorder worked.")
-    except ImportError as e2:
-        print(f"Fallback import RealtimeSTT.RealtimeSTT.AudioToTextRecorder also failed: {e2}")
-        print("This indicates a deeper issue, possibly within audio_recorder.py or its own imports.")
-        # You could try to import audio_recorder directly to see its specific error
-        try:
-            print("Attempting to import RealtimeSTT.RealtimeSTT.audio_recorder directly...")
-            import RealtimeSTT.RealtimeSTT.audio_recorder
-            print("Importing RealtimeSTT.RealtimeSTT.audio_recorder worked, but AudioToTextRecorder was not exposed correctly.")
-        except ImportError as e3:
-            print(f"Direct import of RealtimeSTT.RealtimeSTT.audio_recorder failed: {e3}") # THIS MIGHT BE THE ROOT CAUSE
-        except Exception as e_other:
-            print(f"Some other error importing RealtimeSTT.RealtimeSTT.audio_recorder: {e_other}")
+    print(f"CRITICAL: Failed to import AudioToTextRecorder even with direct path: {e}")
+    # Add more debug info if this fails, though it shouldn't based on previous log
+    print(f"Current sys.path: {sys.path}")
+    print(f"Contents of /app: {os.listdir('/app') if os.path.exists('/app') else 'N/A'}")
+    print(f"Contents of /app/RealtimeSTT: {os.listdir('/app/RealtimeSTT') if os.path.exists('/app/RealtimeSTT') else 'N/A'}")
+    print(f"Contents of /app/RealtimeSTT/RealtimeSTT: {os.listdir('/app/RealtimeSTT/RealtimeSTT') if os.path.exists('/app/RealtimeSTT/RealtimeSTT') else 'N/A'}")
+    sys.exit("Exiting due to critical import error.")
 
 
-    sys.exit("Exiting due to import error.") # Stop script if import fails
-
-# If import was successful, continue with the rest of the server code
 import asyncio
 import websockets
 import threading
@@ -66,7 +28,6 @@ import numpy as np
 from scipy.signal import resample # Ensure scipy is in your requirements-gpu.txt
 import json
 import logging
-# logging setup was here before, ensure it's placed after successful essential imports or handle gracefully
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,13 +35,13 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
-logging.getLogger('websockets').setLevel(logging.WARNING) # Quieten verbose websockets logs
+logging.getLogger('websockets').setLevel(logging.WARNING)
 
 is_running = True
 recorder = None
 recorder_ready = threading.Event()
 client_websocket = None
-main_loop = None # To schedule coroutines from the recorder thread
+main_loop = None
 
 async def send_to_client(message):
     global client_websocket, logger
@@ -89,12 +50,11 @@ async def send_to_client(message):
             await client_websocket.send(message)
         except websockets.exceptions.ConnectionClosed:
             logger.info("Client disconnected while trying to send a message.")
-            client_websocket = None # Clear the stale websocket
+            client_websocket = None
         except Exception as e:
             logger.error(f"Error sending message to client: {e}")
 
 def text_detected(text):
-    """Callback for realtime transcription updates."""
     global main_loop, logger
     if main_loop and main_loop.is_running():
         asyncio.run_coroutine_threadsafe(
@@ -119,7 +79,7 @@ recorder_config = {
     'min_gap_between_recordings': 0.0,
     'enable_realtime_transcription': True,
     'realtime_processing_pause': 0.05,
-    'realtime_model_type': 'tiny.en',
+    'realtime_model_type': 'tiny.en', # This should also try to use 'cuda' if device='cuda'
     'on_realtime_transcription_stabilized': text_detected,
 }
 
@@ -127,7 +87,7 @@ def run_recorder():
     global recorder, main_loop, is_running, logger, recorder_ready
     try:
         logger.info(f"Initializing RealtimeSTT with config: {json.dumps(recorder_config, default=lambda o: '<object>')}")
-        recorder = AudioToTextRecorder(**recorder_config) # This line will fail if import failed
+        recorder = AudioToTextRecorder(**recorder_config)
         logger.info("RealtimeSTT initialized successfully.")
         recorder_ready.set() 
 
@@ -144,7 +104,7 @@ def run_recorder():
                             })), main_loop)
                 else:
                     if main_loop and main_loop.is_running():
-                        asyncio.run_coroutine_threadsafe(asyncio.sleep(0.01), main_loop) 
+                           asyncio.run_coroutine_threadsafe(asyncio.sleep(0.01), main_loop)
                     else:
                         threading.Event().wait(0.01)
             else:
@@ -152,9 +112,9 @@ def run_recorder():
                 if main_loop and main_loop.is_running():
                     asyncio.run_coroutine_threadsafe(asyncio.sleep(0.1), main_loop)
                 else:
-                    threading.Event().wait(0.1) 
+                    threading.Event().wait(0.1)
 
-    except NameError: # If AudioToTextRecorder was not imported
+    except NameError: 
         logger.error("AudioToTextRecorder is not defined. Import failed earlier.")
         is_running = False
         recorder_ready.set() 
@@ -170,6 +130,7 @@ def run_recorder():
                 logger.info("RealtimeSTT recorder stopped.")
             except Exception as e:
                 logger.error(f"Exception during recorder.stop(): {e}", exc_info=True)
+
 
 def decode_and_resample(audio_data, original_sample_rate, target_sample_rate=16000):
     global logger
@@ -253,7 +214,12 @@ async def main_server_logic():
         is_running = False 
         if recorder_thread.is_alive():
             recorder_thread.join(timeout=5) 
-        return 
+        # Ensure server doesn't try to start if recorder init failed catastrophically
+        # and run_recorder might have exited early before setting recorder_ready.
+        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): # Check if import failed or recorder obj is None
+            logger.error("Exiting main_server_logic as recorder initialization seems to have failed critically.")
+            return
+
 
     server_host = "0.0.0.0"
     server_port = 7860 
@@ -281,20 +247,26 @@ async def main_server_logic():
         logger.info("Server shutdown sequence initiated.")
         is_running = False 
         stop_event.set() 
-        if 'recorder_thread' in globals() and recorder_thread.is_alive(): # Check if defined
+        if 'recorder_thread' in globals() and recorder_thread.is_alive(): 
             logger.info("Waiting for recorder thread to join...")
             recorder_thread.join(timeout=10) 
             if recorder_thread.is_alive():
                 logger.warning("Recorder thread did not join in time.")
         logger.info("Main server logic finished.")
 
-if __name__ == '__main__': # Guard the execution
-    try:
-        asyncio.run(main_server_logic())
-    except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt received. Shutting down application...")
-    except NameError: # Catch if AudioToTextRecorder was not imported
+if __name__ == '__main__':
+    # Check if the critical import worked before trying to run asyncio loop
+    if 'AudioToTextRecorder' in globals():
+        try:
+            asyncio.run(main_server_logic())
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt received. Shutting down application...")
+        except Exception as e: # Catch any other unexpected errors during asyncio.run
+            logger.error(f"Unhandled exception in asyncio.run: {e}", exc_info=True)
+        finally:
+            is_running = False 
+            logger.info("Application shutdown complete.")
+    else:
         logger.error("Application cannot start because AudioToTextRecorder could not be imported.")
-    finally:
-        is_running = False 
-        logger.info("Application shutdown complete.")
+        # is_running will be false by default or set by earlier sys.exit
+        logger.info("Application shutdown due to import failure.")
