@@ -39,7 +39,9 @@ RUN pip3 install --no-cache-dir -r /app/requirements-gpu.txt
 
 # Clone RealtimeSTT repository
 # Using a shallow clone to save space and time if you don't need history
-RUN git clone --depth 1 https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT
+# Added an echo to try and invalidate the cache for this layer
+RUN echo "Forcing re-clone of RealtimeSTT by adding this echo command" && \
+    git clone --depth 1 https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT
 
 # Copy silero_assets from the cloned repo to /app/silero_assets
 # This makes it accessible as "./silero_assets" from the CWD /app when the server runs,
