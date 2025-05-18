@@ -63,27 +63,3 @@ ENV PYTHONPATH="/app:${PYTHONPATH}"
 # Command to run your application
 # The default WORKDIR is /app
 CMD ["python3", "example_browserclient/server.py"]
-```
-
-**Key changes and considerations for this Dockerfile:**
-1.  **`git clone --depth 1`**: Fetches only the latest commit, making the clone faster and smaller.
-2.  **`COPY --chown=root:root /app/RealtimeSTT/silero_assets /app/silero_assets`**: This is the crucial line that makes `silero_assets` available at `/app/silero_assets/`. Since the `WORKDIR` is `/app`, when `AudioToTextRecorder` looks for `"silero_assets"`, it will find `/app/silero_assets/`. The `--chown` flag is good practice to ensure consistent ownership; adjust if your base image user is different and permissions become an issue (though `root` is typical for running services in many Docker setups).
-3.  **`requirements-gpu.txt`**: **Crucially important:** ensure `onnxruntime-gpu` is listed in this file, not just `onnxruntime`. If you only have `onnxruntime`, the ONNX VAD model will run on CPU regardless of other settings.
-4.  **PyTorch Installation**: Explicitly installing `torch==2.3.0+cu121` and `torchaudio==2.3.0+cu121` from the `cu121` index. Your base image `nvidia/cuda:12.4.1-runtime-ubuntu22.04` should be compatible.
-5.  **`apt-get clean` and `rm -rf /var/lib/apt/lists/*`**: Added to reduce image size.
-6.  **`ffmpeg`**: Added as a common audio dependency. `RealtimeSTT` or its dependencies might use it.
-7.  **No `CPU` stage**: For now, focusing only on the `gpu` stage as that's our primary goal.
-
-Make sure your `requirements-gpu.txt` looks something like this (add any other specific versions or packages you need):
-```txt
-# requirements-gpu.txt
-faster-whisper
-onnxruntime-gpu # IMPORTANT for GPU VAD
-websockets
-numpy
-scipy
-# Add any other libraries like colorama if your server still uses them,
-# or any specific versions you require.
-# Example:
-# pydub
-# soundfile
