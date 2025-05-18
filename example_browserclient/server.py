@@ -5,7 +5,7 @@ if __name__ == '__main__':
     import websockets
     import threading
     import numpy as np
-    from scipy.signal import resample # Make sure scipy is in your requirements.txt
+    from scipy.signal import resample
     import json
     import logging
     import sys
@@ -49,21 +49,28 @@ if __name__ == '__main__':
         'use_microphone': False,
         'model': 'large-v2',
         'language': 'en',
+        
+        # --- Modifications for GPU offloading ---
+        'device': "cuda",                   # Ensure main model and real-time model run on CUDA
+        'silero_vad_device': "cuda",        # Move Silero VAD to CUDA
+        'silero_use_onnx': True,            # Explicitly True (often default). Needed for VAD on GPU.
+        # --- End of Modifications ---
+
         'silero_sensitivity': 0.4,
-        'webrtc_sensitivity': 2,
+        'webrtc_sensitivity': 2, 
         'post_speech_silence_duration': 0.7,
         'min_length_of_recording': 0.1,
         'min_gap_between_recordings': 0,
         'enable_realtime_transcription': True,
         'realtime_processing_pause': 0.05,
-        'realtime_model_type': 'tiny.en',
+        'realtime_model_type': 'tiny.en', # Should now run on CUDA due to 'device': 'cuda'
         'on_realtime_transcription_stabilized': text_detected,
     }
 
     def run_recorder():
         global recorder, main_loop, is_running, logger, recorder_ready
         try:
-            logger.info("Initializing RealtimeSTT...")
+            logger.info(f"Initializing RealtimeSTT with config: {recorder_config}")
             recorder = AudioToTextRecorder(**recorder_config)
             logger.info("RealtimeSTT initialized")
             recorder_ready.set()
@@ -131,7 +138,6 @@ if __name__ == '__main__':
                 if not is_running: break
 
                 if isinstance(message, bytes):
-                    # THIS IS THE PRIMARY PATH FOR AUDIO FROM REALTIME1.HTML
                     try:
                         audio_chunk_from_client = message 
                         client_assumed_sample_rate = 16000
@@ -152,12 +158,6 @@ if __name__ == '__main__':
                 
                 elif isinstance(message, str):
                     logger.info(f"Received text message from client: {message}")
-                    # If you need to handle JSON commands from client, parse here
-                    # try:
-                    #     command_data = json.loads(message)
-                    #     # process command_data
-                    # except json.JSONDecodeError:
-                    #     logger.warning(f"Received non-JSON text message: {message}")
                     pass
 
         except websockets.exceptions.ConnectionClosedOK:
@@ -177,8 +177,8 @@ if __name__ == '__main__':
         recorder_thread = threading.Thread(target=run_recorder, daemon=True)
         recorder_thread.start()
 
-        if not recorder_ready.wait(timeout=60):
-            logger.error("RealtimeSTT recorder failed to initialize in 60 seconds. Server not starting.")
+        if not recorder_ready.wait(timeout=30):
+            logger.error("RealtimeSTT recorder failed to initialize in 30 seconds. Server not starting.")
             is_running = False
             if recorder_thread.is_alive(): recorder_thread.join(timeout=1)
             return
@@ -189,7 +189,14 @@ if __name__ == '__main__':
         stop_event = asyncio.Event()
 
         try:
-            async with websockets.serve(audio_handler, server_host, server_port, max_size=None):
+            async with websockets.serve(
+                audio_handler,
+                server_host,
+                server_port,
+                max_size=None,
+                ping_interval=30, 
+                ping_timeout=30   
+            ):
                 await stop_event.wait()
         except OSError as e:
             logger.error(f"OSError starting server (likely port {server_port} already in use): {e}")
