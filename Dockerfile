@@ -57,13 +57,3 @@ ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Command to run your application
 CMD ["python3", "example_browserclient/server.py"]
-```
-
-**The fix:**
-The comment on the `ENV PYTHONPATH` line has been moved to the lines above it.
-
-```dockerfile
-# Set PYTHONPATH
-# The warning about $PYTHONPATH potentially being unset at build time is usually minor
-# and doesn't affect the runtime behavior of the container for this use case.
-ENV PYTHONPATH="/app:${PYTHONPATH}"
