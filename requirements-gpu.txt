@@ -8,3 +8,4 @@ websockets==14.1
 websocket-client==1.8.0
 openwakeword>=0.4.0
 numpy<2.0.0
+onnxruntime-gpu>=1.16.0
