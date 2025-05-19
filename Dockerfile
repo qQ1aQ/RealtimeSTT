@@ -30,14 +30,12 @@ RUN pip3 install --no-cache-dir ctranslate2==4.4.0
 
 # Remove any old versions if they exist from previous layers to ensure clean clone
 RUN rm -rf /app/RealtimeSTT
-RUN rm -rf /app/silero_assets # This ensures /app/silero_assets is clean before a potential move
+RUN rm -rf /app/silero_assets # This is now part of the cloned repo
 
 # Clone the latest RealtimeSTT repository
-# This will place 'RealtimeSTT' package and 'silero_assets' inside /app/RealtimeSTT/
+# This will place the 'RealtimeSTT' package and 'silero_assets' inside /app/RealtimeSTT/
+# e.g. /app/RealtimeSTT/RealtimeSTT/ (package) and /app/RealtimeSTT/silero_assets/
 RUN git clone https://github.com/qQ1aQ/RealtimeSTT.git /app/RealtimeSTT
-
-# Move silero_assets to /app/silero_assets, where the library seems to expect it.
-RUN mv /app/RealtimeSTT/silero_assets /app/silero_assets
 
 # Copy your custom server.py (assuming it's in 'example_browserclient' in your build context)
 # Adjust the source path if your local 'server.py' is elsewhere.
@@ -48,9 +46,11 @@ EXPOSE 7860
 
 # Add /app to PYTHONPATH.
 # The 'RealtimeSTT' package is now at /app/RealtimeSTT/RealtimeSTT/
-# The import `from RealtimeSTT.RealtimeSTT import AudioToTextRecorder` works
-# because /app is on PYTHONPATH, so it finds the /app/RealtimeSTT directory (cloned repo root),
-# and then imports the /app/RealtimeSTT/RealtimeSTT package from there.
+# For 'from RealtimeSTT import ...' to work from your server.py,
+# Python needs to find the directory *containing* the 'RealtimeSTT' package.
+# The cloned repository root is /app/RealtimeSTT. Inside this is the RealtimeSTT package directory.
+# So, /app (which is on PYTHONPATH) allows Python to see the /app/RealtimeSTT directory, which is the project root.
+# The import `from RealtimeSTT import ...` refers to the package directory `/app/RealtimeSTT/RealtimeSTT/`.
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 
 CMD ["python3", "example_browserclient/server.py"]
