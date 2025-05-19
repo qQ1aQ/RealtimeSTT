@@ -72,7 +72,7 @@ recorder_config = {
     'language': 'en',
     'device': "cuda",
     'silero_use_onnx': True, 
-    'silero_assets_path': '/app/RealtimeSTT/silero_assets', # Tells library where to find local VAD assets
+    'silero_repo_or_dir': '/app/RealtimeSTT/silero_assets', # CORRECTED: Use this for local Silero assets
     'silero_sensitivity': 0.4,
     'webrtc_sensitivity': 2,
     'post_speech_silence_duration': 0.7,
