@@ -5,7 +5,6 @@ print("Starting server, please wait...")
 # sys.path should be correctly set by Dockerfile's ENV PYTHONPATH to include /app
 # The RealtimeSTT repo is cloned to /app/RealtimeSTT
 # The package itself is at /app/RealtimeSTT/RealtimeSTT
-# The working import, as per diagnostics, is:
 print(f"Working directory: {os.getcwd()}")
 print(f"Attempting import: from RealtimeSTT.RealtimeSTT import AudioToTextRecorder")
 try:
@@ -13,7 +12,6 @@ try:
     print("Successfully imported AudioToTextRecorder from RealtimeSTT.RealtimeSTT")
 except ImportError as e:
     print(f"CRITICAL: Failed to import AudioToTextRecorder even with direct path: {e}")
-    # Add more debug info if this fails, though it shouldn't based on previous log
     print(f"Current sys.path: {sys.path}")
     print(f"Contents of /app: {os.listdir('/app') if os.path.exists('/app') else 'N/A'}")
     print(f"Contents of /app/RealtimeSTT: {os.listdir('/app/RealtimeSTT') if os.path.exists('/app/RealtimeSTT') else 'N/A'}")
@@ -25,7 +23,7 @@ import asyncio
 import websockets
 import threading
 import numpy as np
-from scipy.signal import resample # Ensure scipy is in your requirements-gpu.txt
+from scipy.signal import resample
 import json
 import logging
 
@@ -65,14 +63,15 @@ def text_detected(text):
     else:
         logger.warning("Main event loop not available for text_detected callback.")
 
+# Configuration to attempt downloading VAD models (silero_vad_path is NOT set)
+# and use JIT for VAD (silero_use_onnx: False)
 recorder_config = {
     'spinner': False,
     'use_microphone': False,
     'model': 'large-v2',
     'language': 'en',
     'device': "cuda",
-    'silero_use_onnx': True,
-    'silero_vad_path': '/app/RealtimeSTT/silero_assets', # CORRECTED PARAMETER NAME
+    'silero_use_onnx': True,  # Using JIT for VAD to avoid ONNX specific issues for this test
     'silero_sensitivity': 0.4,
     'webrtc_sensitivity': 2,
     'post_speech_silence_duration': 0.7,
@@ -80,7 +79,7 @@ recorder_config = {
     'min_gap_between_recordings': 0.0,
     'enable_realtime_transcription': True,
     'realtime_processing_pause': 0.05,
-    'realtime_model_type': 'tiny.en', 
+    'realtime_model_type': 'tiny.en',
     'on_realtime_transcription_stabilized': text_detected,
 }
 
@@ -209,7 +208,7 @@ async def main_server_logic():
     recorder_thread = threading.Thread(target=run_recorder, daemon=True)
     recorder_thread.start()
 
-    initialization_timeout = 90 
+    initialization_timeout = 90 # Increased timeout for model downloads
     if not recorder_ready.wait(timeout=initialization_timeout):
         logger.error(f"RealtimeSTT recorder failed to initialize in {initialization_timeout}s. Server not starting.")
         is_running = False 
@@ -218,7 +217,6 @@ async def main_server_logic():
         if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): 
             logger.error("Exiting main_server_logic as recorder initialization seems to have failed critically.")
             return
-
 
     server_host = "0.0.0.0"
     server_port = 7860 
