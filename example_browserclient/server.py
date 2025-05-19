@@ -71,7 +71,8 @@ recorder_config = {
     'model': 'large-v2',
     'language': 'en',
     'device': "cuda",
-    'silero_use_onnx': True,
+    'silero_use_onnx': True, 
+    'silero_assets_path': '/app/RealtimeSTT/silero_assets', # Tells library where to find local VAD assets
     'silero_sensitivity': 0.4,
     'webrtc_sensitivity': 2,
     'post_speech_silence_duration': 0.7,
@@ -79,7 +80,7 @@ recorder_config = {
     'min_gap_between_recordings': 0.0,
     'enable_realtime_transcription': True,
     'realtime_processing_pause': 0.05,
-    'realtime_model_type': 'tiny.en', # This should also try to use 'cuda' if device='cuda'
+    'realtime_model_type': 'tiny.en', 
     'on_realtime_transcription_stabilized': text_detected,
 }
 
@@ -214,9 +215,7 @@ async def main_server_logic():
         is_running = False 
         if recorder_thread.is_alive():
             recorder_thread.join(timeout=5) 
-        # Ensure server doesn't try to start if recorder init failed catastrophically
-        # and run_recorder might have exited early before setting recorder_ready.
-        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): # Check if import failed or recorder obj is None
+        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): 
             logger.error("Exiting main_server_logic as recorder initialization seems to have failed critically.")
             return
 
@@ -255,18 +254,16 @@ async def main_server_logic():
         logger.info("Main server logic finished.")
 
 if __name__ == '__main__':
-    # Check if the critical import worked before trying to run asyncio loop
     if 'AudioToTextRecorder' in globals():
         try:
             asyncio.run(main_server_logic())
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt received. Shutting down application...")
-        except Exception as e: # Catch any other unexpected errors during asyncio.run
+        except Exception as e: 
             logger.error(f"Unhandled exception in asyncio.run: {e}", exc_info=True)
         finally:
             is_running = False 
             logger.info("Application shutdown complete.")
     else:
         logger.error("Application cannot start because AudioToTextRecorder could not be imported.")
-        # is_running will be false by default or set by earlier sys.exit
         logger.info("Application shutdown due to import failure.")
