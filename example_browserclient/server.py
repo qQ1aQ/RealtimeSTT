@@ -5,6 +5,7 @@ print("Starting server, please wait...")
 # sys.path should be correctly set by Dockerfile's ENV PYTHONPATH to include /app
 # The RealtimeSTT repo is cloned to /app/RealtimeSTT
 # The package itself is at /app/RealtimeSTT/RealtimeSTT
+# The working import, as per diagnostics, is:
 print(f"Working directory: {os.getcwd()}")
 print(f"Attempting import: from RealtimeSTT.RealtimeSTT import AudioToTextRecorder")
 try:
@@ -12,6 +13,7 @@ try:
     print("Successfully imported AudioToTextRecorder from RealtimeSTT.RealtimeSTT")
 except ImportError as e:
     print(f"CRITICAL: Failed to import AudioToTextRecorder even with direct path: {e}")
+    # Add more debug info if this fails, though it shouldn't based on previous log
     print(f"Current sys.path: {sys.path}")
     print(f"Contents of /app: {os.listdir('/app') if os.path.exists('/app') else 'N/A'}")
     print(f"Contents of /app/RealtimeSTT: {os.listdir('/app/RealtimeSTT') if os.path.exists('/app/RealtimeSTT') else 'N/A'}")
@@ -23,7 +25,7 @@ import asyncio
 import websockets
 import threading
 import numpy as np
-from scipy.signal import resample
+from scipy.signal import resample # Ensure scipy is in your requirements-gpu.txt
 import json
 import logging
 
@@ -63,15 +65,13 @@ def text_detected(text):
     else:
         logger.warning("Main event loop not available for text_detected callback.")
 
-# Configuration to attempt downloading VAD models (silero_vad_path is NOT set)
-# and use JIT for VAD (silero_use_onnx: False)
 recorder_config = {
     'spinner': False,
     'use_microphone': False,
     'model': 'large-v2',
     'language': 'en',
     'device': "cuda",
-    'silero_use_onnx': True,  # Using JIT for VAD to avoid ONNX specific issues for this test
+    'silero_use_onnx': True,
     'silero_sensitivity': 0.4,
     'webrtc_sensitivity': 2,
     'post_speech_silence_duration': 0.7,
@@ -79,7 +79,7 @@ recorder_config = {
     'min_gap_between_recordings': 0.0,
     'enable_realtime_transcription': True,
     'realtime_processing_pause': 0.05,
-    'realtime_model_type': 'tiny.en',
+    'realtime_model_type': 'tiny.en', # This should also try to use 'cuda' if device='cuda'
     'on_realtime_transcription_stabilized': text_detected,
 }
 
@@ -208,15 +208,18 @@ async def main_server_logic():
     recorder_thread = threading.Thread(target=run_recorder, daemon=True)
     recorder_thread.start()
 
-    initialization_timeout = 90 # Increased timeout for model downloads
+    initialization_timeout = 90 
     if not recorder_ready.wait(timeout=initialization_timeout):
         logger.error(f"RealtimeSTT recorder failed to initialize in {initialization_timeout}s. Server not starting.")
         is_running = False 
         if recorder_thread.is_alive():
             recorder_thread.join(timeout=5) 
-        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): 
+        # Ensure server doesn't try to start if recorder init failed catastrophically
+        # and run_recorder might have exited early before setting recorder_ready.
+        if 'AudioToTextRecorder' not in globals() or recorder is None and not recorder_ready.is_set(): # Check if import failed or recorder obj is None
             logger.error("Exiting main_server_logic as recorder initialization seems to have failed critically.")
             return
+
 
     server_host = "0.0.0.0"
     server_port = 7860 
@@ -252,16 +255,18 @@ async def main_server_logic():
         logger.info("Main server logic finished.")
 
 if __name__ == '__main__':
+    # Check if the critical import worked before trying to run asyncio loop
     if 'AudioToTextRecorder' in globals():
         try:
             asyncio.run(main_server_logic())
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt received. Shutting down application...")
-        except Exception as e: 
+        except Exception as e: # Catch any other unexpected errors during asyncio.run
             logger.error(f"Unhandled exception in asyncio.run: {e}", exc_info=True)
         finally:
             is_running = False 
             logger.info("Application shutdown complete.")
     else:
         logger.error("Application cannot start because AudioToTextRecorder could not be imported.")
+        # is_running will be false by default or set by earlier sys.exit
         logger.info("Application shutdown due to import failure.")
